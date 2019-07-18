@@ -1,8 +1,10 @@
 options(java.parameters = "-Xmx4g")
+library(data.table)
+
 
 ### import data
 library(XLConnect) # reading excel files
-title_job_description <- readWorksheetFromFile("Golden set 11168 vacancies plus UWV_standard occupations.xlsx", sheet= "title_job_description",header=TRUE)
+title_job_description <- readWorksheetFromFile("data/Golden set 11168 vacancies plus UWV_standard occupations.xlsx", sheet= "title_job_description",header=TRUE)
 
 # remove row 631 (Technical and Production) because job_description is too short
 title_job_description<- title_job_description[-631,]
@@ -104,3 +106,54 @@ result <- slda.em(documents=corpus_jobs_train,
                   logistic=TRUE,
                   method="sLDA", MaxNWts = 20000)
 
+predictions <- slda.predict(corpus_jobs, result$topics,result$model,alpha = 1,eta=0.1)
+predictions.docsums <- slda.predict.docsums(corpus_jobs, result$topics, alpha = 1,eta=0.1)
+
+industryNames[pred_function(predictions)+1]
+
+conti_table <- table(pred_function(predictions), sector_jobs)
+print(k)
+print(sum(diag(conti_table))/sum(conti_table))
+
+dist_conti=1-(conti_table/apply(conti_table,2,sum))
+
+fit <- cmdscale(dist_conti,eig=TRUE, k=2)
+#fit <- isoMDS(dist_conti, k=2)
+
+df_fit= data.table(fit$points)
+colnames(df_fit)
+
+ggplot(df_fit, aes(x=V1,y=V2, label=row.names(fit$points))) +
+  geom_point()+
+  geom_text_repel()+
+  scale_radius(range = c(3,6))
+
+
+ theta <- t(apply(result$document_sums + 1, 2, function(x) x/sum(x)))
+ phi <- t(apply(t(result$topics) + .1, 2, function(x) x/sum(x)))
+
+ #topic.labels <- mallet.topic.labels(topic.model, topic.words, 3)
+ topclust=mallet.topic.hclust(phi, theta, 0.3)
+ #plot(mallet.topic.hclust(phi, theta, 0.3), labels=topic.labels)
+ 
+top_doc=top.topic.documents(predictions.docsums, num.documents = 10, alpha=0.1)
+
+#7971  7580 10652  7869  7217  6895  6545 10668  7755
+#5723
+which(sector_jobs==20)
+#top_doc
+
+topicdocs=function(x,y){
+ match=sum(which( x %in% y))
+ if(is.null(match)) 0
+ else match
+}
+hr=unlist(apply(top_doc,2, topicdocs,y=which(sector_jobs==27)))
+Topics[which(hr>0)]
+
+
+range.data.input <- apply(predictions, 2, range)
+train.indx <- sample(1:nrow(predictions), 6700)
+tra.job <- cbind(predictions[train.indx, ], sector_jobs[train.indx])
+tst.job <- predictions[-train.indx, ]
+real.industry<- sector_jobs[-train.indx]

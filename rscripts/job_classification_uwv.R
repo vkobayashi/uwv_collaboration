@@ -10,30 +10,32 @@ library(TunePareto)
 library(stats)
 library(nnet)
 library(beepr)
+library(data.table)
 #library("RYandexTranslate")
 
 #api_key="trnsl.1.1.20170915T130653Z.8a46158b2e4a10fe.86542c66c781aa925c35a70ac56b0f516e590374"
 myapi_key="trnsl.1.1.20170915T130653Z.8a46158b2e4a10fe.86542c66c781aa925c35a70ac56b0f516e590374"
 
 
-title_job_description <- readWorksheetFromFile("Golden set 11168 vacancies plus UWV_standard occupations.xlsx", sheet= "title_job_description",header=TRUE)
+title_job_description <- readWorksheetFromFile("data/Golden set 11168 vacancies plus UWV_standard occupations.xlsx", sheet= "title_job_description",header=TRUE)
 
-title_job_description<- title_job_description[-631,]
+title_job_description<- data.table(title_job_description[-631,])
+title_jobdesc <- na.omit(title_job_description, cols="job_description")
 
-translate(api_key=myapi_key,text=title_job_description[4,3],lang="nl-en" )
+#translate(api_key=myapi_key,text=title_job_description[4,3],lang="nl-en" )
 
 ### Translate to English
-for(job in 8495:nrow(title_job_description)){
-  print(job)
-  if(!is.na(title_job_description[job,3])){
-  segmented_vac <- mysentsegmentor(title_job_description[job,3])
-  segmented_vac<-sapply(segmented_vac, gsub, pattern="#", replacement= "",USE.NAMES = FALSE)
-  sent_translate_en<-sapply(segmented_vac, translate, api_key=myapi_key,lang="nl-en", USE.NAMES=FALSE)
-  joball_transform <- unlist(sent_translate_en[2,])
-  cat(paste(title_job_description[job, 1], joball_transform, sep="\t"), file="english.txt", sep="\n", append=TRUE)}
-  else{next}
-}
-beep(3)
+# for(job in 8495:nrow(title_job_description)){
+#   print(job)
+#   if(!is.na(title_job_description[job,3])){
+#   segmented_vac <- mysentsegmentor(title_job_description[job,3])
+#   segmented_vac<-sapply(segmented_vac, gsub, pattern="#", replacement= "",USE.NAMES = FALSE)
+#   sent_translate_en<-sapply(segmented_vac, translate, api_key=myapi_key,lang="nl-en", USE.NAMES=FALSE)
+#   joball_transform <- unlist(sent_translate_en[2,])
+#   cat(paste(title_job_description[job, 1], joball_transform, sep="\t"), file="english.txt", sep="\n", append=TRUE)}
+#   else{next}
+# }
+# beep(3)
 
 #stopped at 8495
 #translateR::translate(content.vec = gs_essay[[varname]], microsoft.client.id = my_client_id, microsoft.client.secret=my_client_secret, source.lang='nl', target.lang='en' )
@@ -83,15 +85,28 @@ prep_docu <- function(doc){
 
 
 prep_docu("yes we know that 1 + 1 = 3 u . g hello .net and\\n c++ ab .knowledge")
-prep_docu(title_job_description$job_description[155])
+#prep_docu(title_job_description$job_description[155])
+prep_docu(title_jobdesc$job_description[155])
+
+# selectDoc <- function(sizeeach){
+#   selected_rows <- integer()
+#   #all_sectors <- unique(title_job_description$UWV.Occ.subsector.title)
+#   all_sectors <- unique(title_job_description$UWV.Occ.sector.title)
+#   for(sector in all_sectors){
+#     #select_rows <- sample(which(title_job_description$UWV.Occ.subsector.title==sector), size=sizeeach, replace=TRUE)
+#     select_rows <- sample(which(title_job_description$UWV.Occ.sector.title==sector), size=sizeeach, replace=TRUE)
+#     selected_rows<- append(selected_rows,select_rows) 
+#   }
+#   return(selected_rows)
+# } 
+
 
 selectDoc <- function(sizeeach){
   selected_rows <- integer()
-  #all_sectors <- unique(title_job_description$UWV.Occ.subsector.title)
-  all_sectors <- unique(title_job_description$UWV.Occ.sector.title)
+  all_sectors <- unique(title_jobdesc$UWV.Occ.subsector.title)
   for(sector in all_sectors){
     #select_rows <- sample(which(title_job_description$UWV.Occ.subsector.title==sector), size=sizeeach, replace=TRUE)
-    select_rows <- sample(which(title_job_description$UWV.Occ.sector.title==sector), size=sizeeach, replace=TRUE)
+    select_rows <- sample(which(title_jobdesc$UWV.Occ.subsector.title==sector), size=sizeeach, replace=TRUE)
     selected_rows<- append(selected_rows,select_rows) 
   }
   return(selected_rows)
@@ -208,7 +223,7 @@ coef(result$model)
 
 
 
-predictions <- slda.predict(corpus_jobs[1:10], result$topics,result$model,alpha = 1,eta=0.1)
+predictions <- slda.predict(corpus_jobs, result$topics,result$model,alpha = 1,eta=0.1)
 industryNames[pred_function(predictions)+1]
 
 conti_table <- table(pred_function(predictions), sector_jobs)
@@ -221,10 +236,10 @@ tra.job <- cbind(predictions[train.indx, ], sector_jobs[train.indx])
 tst.job <- predictions[-train.indx, ]
 real.industry<- sector_jobs[-train.indx]
 
-object.frbcs.w <- frbs.learn(tra.job, range.data.input, method.type="FRBCS.W", control=list(num.labels=9, type.mf="SIGMOID", type.implication.func="LUKASIEWICZ"))
+#object.frbcs.w <- frbs.learn(tra.job, range.data.input, method.type="FRBCS.W", control=list(num.labels=9, type.mf="SIGMOID", type.implication.func="LUKASIEWICZ"))
 
-pred<- predict(object.frbcs.w, tst.job[1:10,])
-err <- 100* sum(pred !=real.industry) / length(pred)
+#pred<- predict(object.frbcs.w, tst.job[1:10,])
+#err <- 100* sum(pred !=real.industry) / length(pred)
 
 ggplot(dtf, aes(Industry, Score)) +
   geom_bar(stat="identity", aes(fill=ifelse(Score>=0,"blue","red"))) +

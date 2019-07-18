@@ -1,42 +1,46 @@
+load("res/sldajob_subsectors.RData")
+#corpus_jobs
+#industryNames
+#result
+#to.keep
 
-
-
-data(poliblog.documents)
-
-data(poliblog.vocab)
-
-data(poliblog.ratings)
-
-poliblog.ratings_01<- as.integer(ifelse(poliblog.ratings==-100, 0,1))
-
- num.topics <- 10
+# data(poliblog.documents)
+# 
+# data(poliblog.vocab)
+# 
+# data(poliblog.ratings)
+# 
+# poliblog.ratings_01<- as.integer(ifelse(poliblog.ratings==-100, 0,1))
+# 
+#  num.topics <- 10
 
  ## Initialize the params
- params <- sample(c(0, 1), num.topics, replace=TRUE)
+ #params <- sample(c(0, 1), num.topics, replace=TRUE)
  
- myalpha <- alpha/
+ 
   
- result <- slda.em(documents=poliblog.documents,
-                                        K=num.topics,
-                                        vocab=poliblog.vocab,
-                                        num.e.iterations=10,
-                                        num.m.iterations=4,
-                                        alpha=1.0, eta=0.1,
-                                       #poliblog.ratings / 100,
-                   poliblog.ratings_01,
-                                        params,
-                                        variance=0.25,
-                                       lambda=1.0,
-                                        logistic=TRUE,
-                                        method="sLDA")
+ # result <- slda.em(documents=poliblog.documents,
+ #                                        K=num.topics,
+ #                                        vocab=poliblog.vocab,
+ #                                        num.e.iterations=10,
+ #                                        num.m.iterations=4,
+ #                                        alpha=1.0, eta=0.1,
+ #                                       #poliblog.ratings / 100,
+ #                   poliblog.ratings_01,
+ #                                        params,
+ #                                        variance=0.25,
+ #                                       lambda=1.0,
+ #                                        logistic=TRUE,
+ #                                        method="sLDA")
   
  ## Make a pretty picture.
     require("ggplot2")
   
-  Topics <- apply(top.topic.words(result$topics, 5, by.score=TRUE),
+  Topics <- apply(top.topic.words(result$topics, 10, by.score=TRUE),
                     +                 2, paste, collapse=" ")
   
    coefs <- data.frame(coef(summary(result$model)))
+  #coefs <- data.frame(coef(result$model))
   
    theme_set(theme_bw())
   
@@ -65,17 +69,22 @@ poliblog.ratings_01<- as.integer(ifelse(poliblog.ratings==-100, 0,1))
        theme(legend.position = "none")
  
     
-     predicted.docsums <- slda.predict.docsums(poliblog.documents,
-                                                +                                           result$topics, 
-                                                +                                           alpha = 1.0,
-                                                +                                           eta=0.1)
+     # predicted.docsums <- slda.predict.docsums(poliblog.documents,
+     #                                            +                                           result$topics, 
+     #                                            +                                           alpha = 1.0,
+     #                                            +                                           eta=0.1)
+     
+     predicted.docsums <- slda.predict.docsums(corpus_jobs,
+                                               result$topics, 
+                                               alpha = 1.0,
+                                               eta=0.1)
   
  predicted.proportions <- t(predicted.docsums) / colSums(predicted.docsums)
   
   qplot(`Topic 1`, `Topic 2`, 
-          +       data = structure(data.frame(predicted.proportions), 
-                                   +                        names = paste("Topic", 1:10)), 
-          +       size = `Topic 3`)
+          data = structure(data.frame(predicted.proportions), 
+                          names = paste("Topic", 1:10)), 
+          size = `Topic 3`)
 
     
     
