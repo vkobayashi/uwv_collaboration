@@ -11,10 +11,11 @@ library(stats)
 library(nnet)
 library(beepr)
 library(data.table)
+library(slam)
 #library("RYandexTranslate")
 
 #api_key="trnsl.1.1.20170915T130653Z.8a46158b2e4a10fe.86542c66c781aa925c35a70ac56b0f516e590374"
-myapi_key="trnsl.1.1.20170915T130653Z.8a46158b2e4a10fe.86542c66c781aa925c35a70ac56b0f516e590374"
+#myapi_key="trnsl.1.1.20170915T130653Z.8a46158b2e4a10fe.86542c66c781aa925c35a70ac56b0f516e590374"
 
 
 title_job_description <- readWorksheetFromFile("data/Golden set 11168 vacancies plus UWV_standard occupations.xlsx", sheet= "title_job_description",header=TRUE)
@@ -65,40 +66,59 @@ prep_docu <- function(doc){
   #  gsub(pattern="\\\\n",replacement=' ') %>% 
   #  gsub(pattern="\\\\r",replacement=' ')
   doc <- doc %>% 
+    strsplit(split ="(?<=\\.)(?=[A-Z])", perl=TRUE) %>%
+    unlist %>%
+    strsplit(split ="(?<=[a-z])+(?=[A-Z])+", perl=TRUE) %>%
+    unlist %>%
+    paste0(collapse=" ") %>%
     str_replace_all(pattern="\\\\n",replacement=' ') %>% 
     str_replace_all(pattern="\\\\r",replacement=' ') %>%
-    str_replace_all(pattern="\\\\t",replacement=' ')
+    str_replace_all(pattern="\\\\t",replacement=' ') %>%
+    str_replace_all(pattern="[¢â€™¦Â£Ã]",replacement=" ")
+  
   vac_tokens <- doc %>% 
     tolower %>% 
-    removeNumbers %>% 
-    removeWords(words=c(tm::stopwords(kind="nl"), tm::stopwords(kind="en"))) %>% 
+    str_replace_all(pattern='/',replacement=' ') %>%
+    #removePunctuation() %>%
+    #removeWords(words=tm::stopwords(kind="en")) %>%
+    #str_replace_all(pattern='[[:space:]]+\\b[[:digit:]]+\\b[[:space:]]+',replacement=' ') %>%
+    #removeNumbers %>% 
+    #removeWords(words=c(tm::stopwords(kind="nl"), tm::stopwords(kind="en"))) %>% 
     #  
     #str_replace_all("[^[:graph:]]", " ") %>% 
     #gsub('* \\b[[:alpha:]]{1}\\b*','')
    #stripWhitespace %>% 
-    remove_one_char(2) %>% 
-    str_replace_all("[[:punct:]]", " ") %>%
-    #gsub(pattern="[[:punct:]]",replacement='') %>%
+     
+    #str_replace_all("\\.", "") %>%
+    gsub(pattern="(?!\\+)[[:punct:]]",replacement='', perl=TRUE) %>%
+    #gsub(pattern="[:;.,'()-]",replacement='') %>%
+    #gsub(pattern="[’]", replacement=" ")%>%
+    str_replace_all(pattern=' \\b[[:digit:]]+[[:space:]]?',replacement=' ') %>%
+    remove_one_char(3) %>%
     stripWhitespace %>% trimws
   return(vac_tokens)
 }
 
 
 prep_docu("yes we know that 1 + 1 = 3 u . g hello .net and\\n c++ ab .knowledge")
+prep_docu("yes we know that 1 + 1 = 3 u . g hello .net and\\n c++ ab .knowledge.The 70")
 #prep_docu(title_job_description$job_description[155])
-prep_docu(title_jobdesc$job_description[155])
+title_jobdesc$job_description[155]
+title_jobdesc$job_description[33]
+prep_docu(title_jobdesc$job_description[c(33,155)])
+prep_docu(title_jobdesc$job_description[1])
 
 # selectDoc <- function(sizeeach){
 #   selected_rows <- integer()
 #   #all_sectors <- unique(title_job_description$UWV.Occ.subsector.title)
-#   all_sectors <- unique(title_job_description$UWV.Occ.sector.title)
+#   all_sectors <- unique(title_jobdesc$UWV.Occ.sector.title)
 #   for(sector in all_sectors){
 #     #select_rows <- sample(which(title_job_description$UWV.Occ.subsector.title==sector), size=sizeeach, replace=TRUE)
-#     select_rows <- sample(which(title_job_description$UWV.Occ.sector.title==sector), size=sizeeach, replace=TRUE)
-#     selected_rows<- append(selected_rows,select_rows) 
+#     select_rows <- sample(which(title_jobdesc$UWV.Occ.sector.title==sector), size=sizeeach, replace=TRUE)
+#     selected_rows<- append(selected_rows,select_rows)
 #   }
 #   return(selected_rows)
-# } 
+# }
 
 
 selectDoc <- function(sizeeach){
@@ -107,10 +127,10 @@ selectDoc <- function(sizeeach){
   for(sector in all_sectors){
     #select_rows <- sample(which(title_job_description$UWV.Occ.subsector.title==sector), size=sizeeach, replace=TRUE)
     select_rows <- sample(which(title_jobdesc$UWV.Occ.subsector.title==sector), size=sizeeach, replace=TRUE)
-    selected_rows<- append(selected_rows,select_rows) 
+    selected_rows<- append(selected_rows,select_rows)
   }
   return(selected_rows)
-} 
+}
 
 softmax_prob <- function(predvalues){
   denom= 1+ sum(exp(predvalues))
@@ -155,19 +175,39 @@ pred_function_v2<- function(predIndustry){
 
 
 #trainD<-generateCVRuns(title_job_description$UWV.Occ.sector.title, ntimes=1, nfold=10, stratified=TRUE)
-jobdescription <- lapply(title_job_description$job_description, prep_docu)
+jobdescription <- sapply(title_jobdesc$job_description, prep_docu,USE.NAMES=FALSE)
 #jobdesc_test <- lapply(title_job_description$job_description[1001:1020], prep_docu)
+jobdescription <- jobdescription %>% removeWords(stopwords("nl")) %>% 
+                  stripWhitespace()%>% trimws()
 
+jobd.corpus <- Corpus(VectorSource(jobdescription))
+jobd.corpus[[1]]$content
+jobd.dtm <- DocumentTermMatrix(jobd.corpus, control = list(stemming = FALSE, 
+                                                               minWordLength = 2 ))
+dim(jobd.dtm)
+jobd.dtmreduced <-removeSparseTerms(jobd.dtm,.9995)
+dim(jobd.dtmreduced)   
+#findFreqTerms(x=jobd.dtmreduced)
+
+
+term_idf <- log2(nDocs(jobd.dtmreduced)/col_sums(jobd.dtmreduced > 0))
+head(sort(term_idf,decreasing=FALSE),200)
+
+jobd.dtmreduced <- jobd.dtmreduced[,term_idf >= 3]
+jobd.dtmreduced <- jobd.dtmreduced[row_sums(jobd.dtmreduced)>0,]
+
+which(jobd.dtmreduced$dimnames$Terms=="piping")
 #for(k in 1:k){
 
-corpus_jobs <- lexicalize(jobdescription, lower=TRUE)
-wordCount <- word.counts(corpus_jobs$documents,corpus_jobs$vocab)
-maxFreq<- unname(round(quantile(wordCount, .999)))
-to.keep <- corpus_jobs$vocab[wordCount < maxFreq & wordCount >= 3 ] 
-corpus_jobs <- lexicalize(jobdescription, lower=TRUE, vocab=to.keep)
+#corpus_jobs <- lexicalize(jobdescription, lower=TRUE)
+#wordCount <- word.counts(corpus_jobs$documents,corpus_jobs$vocab)
+#maxFreq<- unname(round(quantile(wordCount, .999)))
+#to.keep <- corpus_jobs$vocab[wordCount < maxFreq & wordCount >= 3 ] 
+to.keep= jobd.dtmreduced$dimnames$Terms
+corpus_jobs <- lexicalize(jobdescription, vocab=to.keep)
 #corpus_test <- lexicalize(jobdesc_test, lower=TRUE, vocab = to.keep)
 
-job_sector<-factor(title_job_description$UWV.Occ.sector.title)
+job_sector<-factor(title_jobdesc$UWV.Occ.subsector.title)
 #job_sector<-factor(title_job_description$UWV.Occ.subsector.title)
 industryNames<- levels(job_sector)
 
@@ -182,7 +222,7 @@ table(sector_jobs)
 #corpus_jobs <- corpus_jobs[-which(doc_lengths==0)]
 #sector_jobs <- sector_jobs[-which(doc_lengths==0)]
 
-selectFirst <- selectDoc(500)
+selectFirst <- selectDoc(300)
 corpus_jobs_train <- corpus_jobs[selectFirst]
 sector_jobs_train <- sector_jobs[selectFirst]
 table(sector_jobs_train)
@@ -195,12 +235,15 @@ for(k in c(1, 1/200)){
 num.topics= 200
 
 #params <- sample(c(-1,1), num.topics*10, replace=TRUE)
-params <- runif(num.topics*11, min=-1, max=1)
+params <- runif(num.topics*42, min=-1, max=1)
 #params <- rep(1,num.topics*10)
 
 #doc_lengths<-lapply(corpus_jobs, length)
 #corpus_jobs <- corpus_jobs[-which(doc_lengths==0)]
 #sector_jobs <- sector_jobs[-which(doc_lengths==0)]
+# doc_lengths_tr<-lapply(corpus_jobs_train, length)
+# which(doc_lengths_tr==0)
+
 
 result <- slda.em(documents=corpus_jobs_train,
                                     K=num.topics,
@@ -210,16 +253,20 @@ result <- slda.em(documents=corpus_jobs_train,
                                      alpha=1, eta=.1,
                                    annotations = sector_jobs_train,
                                     params,
-                  variance=0.25,
-                                  lambda=1.0,
-                                    logistic=TRUE,
-                                   method="sLDA", MaxNWts = 20000)
-
+                                    variance=0.25,
+                                  lambda=0.1,
+                                  regularise=TRUE,
+                                  logistic=TRUE,
+                                  method="sLDA", MaxNWts = 20000)
+resultjobclass = result
+beep(3)
 #Topics <- apply(top.topic.words(result$topics, 10, by.score=TRUE),2, paste, collapse=" ")
-save(result,to.keep,industryNames,corpus_jobs, file="sldajob_subsectors.RData")
+save(result,to.keep,industryNames,corpus_jobs, file="sldajob_sectors_recent.RData")
+save(resultjobclass, to.keep, sector_jobs, job_sector,jobd.corpus,jobd.dtm,jobd.dtmreduced, industryNames, corpus_jobs, selectFirst, title_jobdesc, file="sldajobsubsectors.RData")
 
+load("./res/sldajob_subsectors.RData")
 
-coef(result$model)
+#coef(result$model)
 
 
 
@@ -230,11 +277,11 @@ conti_table <- table(pred_function(predictions), sector_jobs)
 print(k)
 print(sum(diag(conti_table))/sum(conti_table))
 
-range.data.input <- apply(predictions, 2, range)
-train.indx <- sample(1:nrow(predictions), 6700)
-tra.job <- cbind(predictions[train.indx, ], sector_jobs[train.indx])
-tst.job <- predictions[-train.indx, ]
-real.industry<- sector_jobs[-train.indx]
+# range.data.input <- apply(predictions, 2, range)
+# train.indx <- sample(1:nrow(predictions), 6700)
+# tra.job <- cbind(predictions[train.indx, ], sector_jobs[train.indx])
+# tst.job <- predictions[-train.indx, ]
+# real.industry<- sector_jobs[-train.indx]
 
 #object.frbcs.w <- frbs.learn(tra.job, range.data.input, method.type="FRBCS.W", control=list(num.labels=9, type.mf="SIGMOID", type.implication.func="LUKASIEWICZ"))
 

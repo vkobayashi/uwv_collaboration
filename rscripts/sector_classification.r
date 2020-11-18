@@ -1,6 +1,6 @@
 options(java.parameters = "-Xmx4g")
 library(data.table)
-
+library(ggrepel)
 
 ### import data
 library(XLConnect) # reading excel files
@@ -123,7 +123,10 @@ fit <- cmdscale(dist_conti,eig=TRUE, k=2)
 df_fit= data.table(fit$points)
 colnames(df_fit)
 
-ggplot(df_fit, aes(x=V1,y=V2, label=row.names(fit$points))) +
+ggplot(df_fit, aes(x=V1,y=V2, 
+                   #label=row.names(fit$points)
+                   label=industryNames
+                   )) +
   geom_point()+
   geom_text_repel()+
   scale_radius(range = c(3,6))
